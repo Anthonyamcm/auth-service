@@ -8,9 +8,9 @@ import {
   CognitoIdentityProviderServiceException,
   AuthFlowType,
 } from '@aws-sdk/client-cognito-identity-provider';
-import { Logger } from '../utils/logger';
 import cognitoClient from '../utils/awsConfig';
 import { CustomError } from '../middlewares/error.middleware';
+import Logger from '../utils/logger';
 
 export class AuthService {
   private userPoolId = process.env.COGNITO_USER_POOL_ID!;

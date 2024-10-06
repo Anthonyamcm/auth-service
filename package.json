@@ -27,6 +27,7 @@
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.0",
     "winston": "^3.9.0",
+    "winston-daily-rotate-file": "^5.0.0",
     "xss-clean": "^0.1.1"
   },
   "devDependencies": {

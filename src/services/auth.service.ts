@@ -12,28 +12,28 @@ import {
 import cognitoClient from '../utils/awsConfig';
 import { CustomError } from '../middlewares/error.middleware';
 import Logger from '../utils/logger';
+import apiClient from '../utils/apiClient';
 
 export class AuthService {
   private userPoolId = process.env.COGNITO_USER_POOL_ID!;
   private clientId = process.env.COGNITO_CLIENT_ID!;
 
-  async register(email: string, password: string) {
+  async register(identifier: string, password: string, isEmail: boolean) {
+    const userAttributes = isEmail
+      ? [{ Name: 'email', Value: identifier }]
+      : [{ Name: 'phone_number', Value: identifier }];
+
     const params = {
       ClientId: this.clientId,
-      Username: email,
+      Username: identifier,
       Password: password,
-      UserAttributes: [
-        {
-          Name: 'email',
-          Value: email,
-        },
-      ],
+      UserAttributes: userAttributes,
     };
 
     try {
       const command = new SignUpCommand(params);
       const response = await cognitoClient.send(command);
-      Logger.info(`User registration successful for email: ${email}`);
+      Logger.info(`User registration was successful for: ${identifier}`);
       return response;
     } catch (error) {
       const err = error as CognitoIdentityProviderServiceException;
@@ -49,7 +49,7 @@ export class AuthService {
           message = 'Registration failed';
       }
 
-      Logger.error(`User registration failed for email: ${email}`, {
+      Logger.error(`User registration failed for: ${identifier}`, {
         error: err,
       });
       const customError: CustomError = new Error(message);
@@ -58,17 +58,66 @@ export class AuthService {
     }
   }
 
-  async confirmSignUp(email: string, code: string) {
+  async confirmSignUp(
+    identifier: string,
+    code: string,
+    username: string,
+    display_name: string,
+    password: string
+  ) {
     const params = {
       ClientId: this.clientId,
-      Username: email,
+      Username: identifier,
       ConfirmationCode: code,
+      ForceAliasCreation: false,
     };
 
     try {
       const command = new ConfirmSignUpCommand(params);
       await cognitoClient.send(command);
-      Logger.info(`User confirmed successfully for email: ${email}`);
+      Logger.info(`User confirmed successfully for: ${identifier}`);
+
+      const tokens = await this.login(identifier, password);
+
+      if (
+        tokens &&
+        tokens.AccessToken &&
+        tokens.RefreshToken &&
+        tokens.IdToken
+      ) {
+        Logger.info(`User authenticated successfully for: ${identifier}`);
+
+        const decodedIdToken = this.decodeJwt(tokens?.IdToken);
+        const cognito_sub = decodedIdToken.sub;
+
+        this.createUserInUserService(
+          {
+            cognito_sub,
+            username,
+            display_name,
+          },
+          tokens.AccessToken
+        )
+          .then(() => {
+            Logger.info(
+              `User record created in User-Service for cognito_sub: ${cognito_sub}`
+            );
+          })
+          .catch(error => {
+            Logger.error(
+              `Failed to create user in User-Service for cognito_sub: ${cognito_sub}`,
+              error
+            );
+            // Optionally, implement retry logic or alerting here
+          });
+
+        return tokens;
+      } else {
+        Logger.error(
+          `Authentication failed for: ${identifier}. No tokens returned.`
+        );
+        throw new Error('Authentication failed. Tokens not received.');
+      }
     } catch (error) {
       const err = error as CognitoIdentityProviderServiceException;
       let message = err.message;
@@ -76,20 +125,32 @@ export class AuthService {
 
       switch (err.name) {
         case 'CodeMismatchException':
-          message = 'Invalid confirmation code';
-          status = 400;
+          message = 'Invalid confirmation code.';
           break;
         case 'ExpiredCodeException':
-          message = 'Confirmation code expired';
-          status = 400;
+          message = 'Confirmation code has expired.';
+          break;
+        case 'NotAuthorizedException':
+          message = 'Incorrect username or password.';
+          status = 401;
+          break;
+        case 'UserNotFoundException':
+          message = 'User does not exist.';
+          break;
+        case 'TooManyFailedAttemptsException':
+          message = 'Too many failed attempts. Please try again later.';
+          status = 429;
           break;
         default:
-          message = 'Confirmation failed';
+          message = err.message || 'An error occurred during confirmation.';
       }
 
-      Logger.error(`User confirmation failed for email: ${email}`, {
-        error: err,
-      });
+      Logger.error(
+        `User confirmation/authentication failed for: ${identifier}`,
+        {
+          error: err,
+        }
+      );
       const customError: CustomError = new Error(message);
       customError.status = status;
       throw customError;
@@ -272,6 +333,50 @@ export class AuthService {
       const customError: CustomError = new Error(message);
       customError.status = status;
       throw customError;
+    }
+  }
+
+  /**
+   * Decodes a JWT token.
+   * Note: This method does not verify the token's signature. For verification, use a JWT library.
+   * @param token - The JWT token to decode.
+   * @returns The decoded token payload.
+   */
+  private decodeJwt(token: string): any {
+    const payload = token.split('.')[1];
+    const decoded = Buffer.from(payload, 'base64').toString('utf-8');
+    return JSON.parse(decoded);
+  }
+
+  /**
+   * Communicates with User-Service to create a user record.
+   * @param userData - The user data to send.
+   */
+  private async createUserInUserService(
+    userData: {
+      cognito_sub: string;
+      email?: string;
+      phone_number?: string;
+      username: string;
+      display_name: string;
+    },
+    idToken: string
+  ): Promise<void> {
+    try {
+      await apiClient.post('/users', userData, {
+        headers: {
+          Authorization: `Bearer ${idToken}`, // Pass the auth token here
+        },
+      });
+      Logger.info(
+        `User record created in User-Service for cognito_sub: ${userData.cognito_sub}`
+      );
+    } catch (error) {
+      Logger.error(
+        `Failed to create user in User-Service for cognito_sub: ${userData.cognito_sub}`,
+        error
+      );
+      throw new Error('Failed to create user in User-Service.');
     }
   }
 }

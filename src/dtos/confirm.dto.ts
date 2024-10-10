@@ -1,9 +1,12 @@
-import { IsEmail, IsString } from 'class-validator';
+import { IsEmail, IsString, isString } from 'class-validator';
 
 export class ConfirmDto {
-  @IsEmail()
-  email!: string;
+  @IsString()
+  identifier!: string;
 
   @IsString()
   code!: string;
+
+  @IsString()
+  password!: string;
 }

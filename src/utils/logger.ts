@@ -73,14 +73,5 @@ const Logger: WinstonLogger = createLogger({
   exitOnError: false, // Prevent exiting on handled exceptions
 });
 
-// If not in production, add an additional Console transport for better readability
-if (environment !== 'production') {
-  Logger.add(
-    new transports.Console({
-      format: devFormat,
-    })
-  );
-}
-
 // Export the singleton logger instance
 export default Logger;

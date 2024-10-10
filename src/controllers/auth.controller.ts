@@ -41,9 +41,9 @@ router.post(
   '/register',
   validationMiddleware(RegisterDto),
   async (req: Request, res: Response, next: NextFunction) => {
-    const { email, password } = req.body;
+    const { identifier, password, isEmail } = req.body;
     try {
-      await authService.register(email, password);
+      await authService.register(identifier, password, isEmail);
       res.status(201).json({ message: 'User registered successfully' });
     } catch (error) {
       next(error);
@@ -74,10 +74,16 @@ router.post(
   '/confirm',
   validationMiddleware(ConfirmDto),
   async (req: Request, res: Response, next: NextFunction) => {
-    const { email, code } = req.body;
+    const { identifier, code, password, displayName, username } = req.body;
     try {
-      await authService.confirmSignUp(email, code);
-      res.status(200).json({ message: 'User confirmed successfully' });
+      const result = await authService.confirmSignUp(
+        identifier,
+        code,
+        username,
+        displayName,
+        password
+      );
+      res.status(200).json(result);
     } catch (error) {
       next(error);
     }
@@ -111,7 +117,6 @@ router.post(
     try {
       const result = await authService.login(email, password);
       res.status(200).json({
-        message: 'Login successful',
         accessToken: result?.AccessToken,
         refreshToken: result?.RefreshToken,
         idToken: result?.IdToken,

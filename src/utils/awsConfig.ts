@@ -1,28 +1,30 @@
 import { CognitoIdentityProviderClient } from '@aws-sdk/client-cognito-identity-provider';
-import dotenv from 'dotenv';
+import { AWS_REGION } from '../config/env';
+import Logger from './logger';
 
-// Load environment variables from .env file
-dotenv.config();
+let cognitoClient: CognitoIdentityProviderClient | null = null;
 
-// Destructure required environment variables
-const { AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY } = process.env;
+/**
+ * Initializes and returns the Cognito Identity Provider Client.
+ * Utilizes a singleton pattern to ensure only one instance exists.
+ * @returns CognitoIdentityProviderClient instance.
+ */
+export function getCognitoClient(): CognitoIdentityProviderClient {
+  if (cognitoClient) {
+    return cognitoClient;
+  }
 
-// Validate essential environment variables
-if (!AWS_REGION) {
-  throw new Error('Missing AWS_REGION environment variable');
+  if (!AWS_REGION) {
+    Logger.error('AWS_REGION is not set in environment variables.');
+    throw new Error('AWS_REGION is not set in environment variables.');
+  }
+
+  cognitoClient = new CognitoIdentityProviderClient({ region: AWS_REGION });
+  Logger.info('CognitoIdentityProviderClient initialized.');
+  return cognitoClient;
 }
 
-if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
-  throw new Error('Missing AWS credentials in environment variables');
-}
+// Initialize the client immediately
+const client = getCognitoClient();
 
-// Initialize the Cognito Identity Provider Client
-const cognitoClient = new CognitoIdentityProviderClient({
-  region: AWS_REGION,
-  credentials: {
-    accessKeyId: AWS_ACCESS_KEY_ID,
-    secretAccessKey: AWS_SECRET_ACCESS_KEY,
-  },
-});
-
-export default cognitoClient;
+export default client;

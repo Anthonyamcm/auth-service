@@ -1,25 +1,31 @@
 import { Request, Response, NextFunction } from 'express';
 import Logger from '../utils/logger';
 
-export interface CustomError extends Error {
-  status?: number;
+export class CustomError extends Error {
+  public status: number;
+
+  constructor(message: string, status: number = 500) {
+    super(message);
+    this.status = status;
+  }
 }
 
-export const errorHandler = (
+export default function errorMiddleware(
   err: CustomError,
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+) {
   const status = err.status || 500;
-  const message = err.message || 'Internal Server Error';
+  const message = err.message || 'Something went wrong';
 
-  Logger.error(
-    `[${req.method}] ${req.path} >> StatusCode:: ${status}, Message:: ${message}`
-  );
+  Logger.error(`Error: ${message}`, {
+    status,
+    stack: err.stack,
+  });
 
   res.status(status).json({
     status,
     message,
   });
-};
+}

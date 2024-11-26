@@ -5,12 +5,8 @@ import rateLimit from 'express-rate-limit';
 import xssClean from 'xss-clean';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
-
 import authRouter from './controllers/auth.controller';
-import { errorHandler } from './middlewares/error.middleware';
 import { setupSwagger } from './utils/swagger';
-
-dotenv.config();
 
 const app = express();
 
@@ -38,8 +34,5 @@ app.use('/auth', authRouter);
 
 // Swagger Documentation
 setupSwagger(app);
-
-// Error Handling Middleware
-app.use(errorHandler);
 
 export default app;
